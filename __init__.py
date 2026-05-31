@@ -16,7 +16,7 @@ Supported Attacks:
     - MPOIA          : Greedy with statistical confidence margins (GRR only).
 
 Quick Start:
-    >>> from ldp_poison_toolkit.experiments import AttackRunner
+    >>> from experiments import AttackRunner
     >>> runner = AttackRunner(n=10000, d=50, epsilon=2.0, n2=1000, r=3, x=10)
     >>> result = runner.run(protocol='grr', attack='greedy')
     >>> print(result.summary())
@@ -24,15 +24,18 @@ Quick Start:
 Based on protocols from the Multi-Freq-LDPy package.
 """
 
-from .experiments.runner import AttackRunner, AttackResult
-from .experiments.benchmark import benchmark_attacks
-from .core import GRR_Client, GRR_Aggregator_MI, UE_Client, UE_Aggregator_MI, LH_Client, LH_Aggregator_MI
-from .utils import (
+from experiments.runner import AttackRunner, AttackResult
+
+from core.grr import GRR_Client, GRR_Aggregator_MI
+from core.oue import UE_Client, UE_Aggregator_MI
+from core.olh import LH_Client, LH_Aggregator_MI
+from utils.data import (
     generate_dataset,
     generate_freq_dict,
     generate_target_items,
-    get_gain,
-    get_rank_gain,
+)
+from utils.metrics import get_gain, get_rank_gain
+from utils.estimators import (
     grr_estimate,
     oue_estimate,
     olh_estimate,
@@ -44,15 +47,11 @@ __author__ = "LDP Poison Toolkit Contributors"
 __license__ = "MIT"
 
 __all__ = [
-    # High-level API
     "AttackRunner",
     "AttackResult",
-    "benchmark_attacks",
-    # Core protocols
     "GRR_Client", "GRR_Aggregator_MI",
     "UE_Client", "UE_Aggregator_MI",
     "LH_Client", "LH_Aggregator_MI",
-    # Utilities
     "generate_dataset",
     "generate_freq_dict",
     "generate_target_items",

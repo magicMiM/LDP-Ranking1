@@ -11,17 +11,30 @@ References:
         estimation" (USENIX Security).
 """
 
+from typing import Tuple
 import numpy as np
+from scipy.sparse import csr_matrix
 
 
 def _matrix_inversion(count_report: np.ndarray, n: int, p: float, q: float) -> np.ndarray:
     """Matrix Inversion (MI) frequency estimator."""
-    est_freq = np.array((count_report - n * q) / (p - q)).clip(0)
-    return np.round(est_freq)
+    est_freq = (count_report - n * q) / (p - q)
+    return np.round(np.clip(est_freq, 0, None))
 
-from scipy.sparse import lil_matrix, csr_matrix
 
-def UE_Client(input_data: int, d: int, epsilon: float, optimal: bool = True,return_sparse:bool=False) -> np.ndarray:
+def _get_ue_params(epsilon: float, optimal: bool) -> Tuple[float, float]:
+    """Calculate perturbation probabilities p and q based on protocol settings."""
+    if optimal:
+        p = 0.5
+        q = 1.0 / (np.exp(epsilon) + 1.0)
+    else:
+        exp_eps_half = np.exp(epsilon / 2.0)
+        p = exp_eps_half / (exp_eps_half + 1.0)
+        q = 1.0 - p
+    return p, q
+
+
+def UE_Client(input_data: int, d: int, epsilon: float, optimal: bool = True, return_sparse: bool = False) -> np.ndarray:
     """
     OUE client-side perturbation for a single user value.
 
@@ -56,14 +69,8 @@ def UE_Client(input_data: int, d: int, epsilon: float, optimal: bool = True,retu
     if epsilon <= 0:
         raise ValueError("epsilon must be > 0.")
 
-    if optimal:
-        p = 0.5
-        q = 1.0 / (np.exp(epsilon) + 1)
-    else:
-        p = np.exp(epsilon / 2) / (np.exp(epsilon / 2) + 1)
-        q = 1.0 - p
+    p, q = _get_ue_params(epsilon, optimal)
 
-    # One-hot encode
     input_ue_data = np.zeros(d)
     if input_data is not None:
         input_ue_data[input_data] = 1
@@ -74,6 +81,7 @@ def UE_Client(input_data: int, d: int, epsilon: float, optimal: bool = True,retu
         threshold = p if input_ue_data[ind] == 1 else q
         if rnd <= threshold:
             sanitized_vec[ind] = 1
+            
     if return_sparse:
         return csr_matrix(sanitized_vec)
 
@@ -108,12 +116,8 @@ def UE_Aggregator_MI(reports: list, d: int, epsilon: float, optimal: bool = True
         raise ValueError("epsilon must be > 0.")
 
     n = len(reports)
+    p, q = _get_ue_params(epsilon, optimal)
 
-    if optimal:
-        p = 0.5
-        q = 1.0 / (np.exp(epsilon) + 1)
-    else:
-        p = np.exp(epsilon / 2) / (np.exp(epsilon / 2) + 1)
-        q = 1.0 - p
+    total = np.sum(reports, axis=0)
 
-    return _matrix_inversion(sum(reports), n, p, q)
+    return _matrix_inversion(total, n, p, q)

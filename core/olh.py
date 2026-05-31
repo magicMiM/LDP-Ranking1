@@ -18,10 +18,7 @@ import xxhash
 from .grr import GRR_Client
 
 
-def _matrix_inversion(count_report: np.ndarray, n: int, p: float, q: float) -> np.ndarray:
-    """Matrix Inversion (MI) frequency estimator."""
-    est_freq = np.array((count_report - n * q) / (p - q)).clip(0)
-    return np.round(est_freq)
+from ._common import matrix_inversion
 
 import secrets  # 新增导入
 def LH_Client(input_data: int, d: int, epsilon: float, optimal: bool = True) -> tuple:
@@ -101,16 +98,30 @@ def LH_Aggregator_MI(reports: list, d: int, epsilon: float, optimal: bool = True
     n = len(reports)
     g = int(round(np.exp(epsilon))) + 1 if optimal else 2
 
+    # 预计算所有报告对每个值的哈希匹配
+    # 使用列表推导和向量化操作
     count_report = np.zeros(d)
-    for sanitized_value, rnd_seed in reports:
-        for v in range(d):
-            if sanitized_value == xxhash.xxh32(str(v), seed=rnd_seed).intdigest() % g:
-                count_report[v] += 1
+
+    # 批量处理：预计算所有seed和sanitized_value
+    seeds = np.array([seed for _, seed in reports], dtype=np.int64)
+    sanitized = np.array([val for val, _ in reports], dtype=np.int32)
+
+    # 对于每个值v，检查哪些报告匹配
+    # 注意：由于xxhash不能向量化，仍需循环但可以优化
+    for v in range(d):
+        # 预计算v的哈希值（对于相同seed可缓存）
+        v_str = str(v)
+        matches = 0
+        for i, (s_val, seed) in enumerate(reports):
+            # 可添加LRU缓存
+            h = xxhash.xxh32(v_str, seed=seed).intdigest() % g
+            if h == s_val:
+                matches += 1
+        count_report[v] = matches
 
     p = np.exp(epsilon) / (np.exp(epsilon) + g - 1)
     q = 1.0 / g
-
-    return _matrix_inversion(count_report, n, p, q)
+    return matrix_inversion(count_report, n, p, q)
 
 from typing import List
 class HashFunctionPool:
