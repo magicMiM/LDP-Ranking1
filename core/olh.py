@@ -14,6 +14,8 @@ References:
 import numpy as np
 from sys import maxsize
 import xxhash
+import secrets
+from typing import List
 
 from .grr import GRR_Client
 
@@ -23,7 +25,12 @@ def _matrix_inversion(count_report: np.ndarray, n: int, p: float, q: float) -> n
     est_freq = np.array((count_report - n * q) / (p - q)).clip(0)
     return np.round(est_freq)
 
-import secrets  # 新增导入
+
+def _get_g_param(epsilon: float, optimal: bool) -> int:
+    """Calculate the reduced domain size g based on epsilon and protocol settings."""
+    return int(round(np.exp(epsilon))) + 1 if optimal else 2
+
+
 def LH_Client(input_data: int, d: int, epsilon: float, optimal: bool = True) -> tuple:
     """
     OLH client-side perturbation for a single user value.
@@ -59,10 +66,9 @@ def LH_Client(input_data: int, d: int, epsilon: float, optimal: bool = True) -> 
         raise ValueError("epsilon must be > 0.")
 
     if epsilon > 0:
-        g = int(round(np.exp(epsilon))) + 1 if optimal else 2
+        g = _get_g_param(epsilon, optimal)
 
-        # 使用 secrets 生成更安全的随机种子（替代 np.random.randint）
-        rnd_seed = secrets.randbits(64)  # 64位随机数
+        rnd_seed = secrets.randbits(64)
         hashed_input_data = (xxhash.xxh32(str(input_data), seed=rnd_seed).intdigest() % g)
         sanitized_value = GRR_Client(hashed_input_data, g, epsilon)
 
@@ -99,7 +105,7 @@ def LH_Aggregator_MI(reports: list, d: int, epsilon: float, optimal: bool = True
         raise ValueError("epsilon must be > 0.")
 
     n = len(reports)
-    g = int(round(np.exp(epsilon))) + 1 if optimal else 2
+    g = _get_g_param(epsilon, optimal)
 
     count_report = np.zeros(d)
     for sanitized_value, rnd_seed in reports:
@@ -112,7 +118,7 @@ def LH_Aggregator_MI(reports: list, d: int, epsilon: float, optimal: bool = True
 
     return _matrix_inversion(count_report, n, p, q)
 
-from typing import List
+
 class HashFunctionPool:
     """哈希函数池，避免重复生成随机种子"""
 
@@ -141,14 +147,12 @@ class HashFunctionPool:
         return seeds
 
 
-# 全局哈希函数池实例
 _HASH_POOL = HashFunctionPool()
 
 
 def LH_Client_Optimized(input_data: int, d: int, epsilon: float, optimal: bool = True) -> tuple:
     """使用哈希函数池的优化版本"""
-    # ... 参数验证 ...
-    g = int(round(np.exp(epsilon))) + 1 if optimal else 2
+    g = _get_g_param(epsilon, optimal)
     rnd_seed = _HASH_POOL.get_seed()
     hashed = xxhash.xxh32(str(input_data), seed=rnd_seed).intdigest() % g
     sanitized = GRR_Client(hashed, g, epsilon)
